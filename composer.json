@@ -8,8 +8,7 @@
         "source": "https://github.com/19peaches/slackhook"
     },
     "require": {
-        "php": ">=5.4",
-        "curl": ">=7.0"
+        "php": ">=5.4"
     },
     "autoload": {
         "psr-4": {
