@@ -1,0 +1,29 @@
+{
+    "name": "19peaches/slackhook",
+    "description": "Simple package for creating Slack messages with attachments via incoming webhooks.",
+    "license": "MIT",
+    "homepage": "http://19peaches.com",
+    "support": {
+        "issues": "https://github.com/19peaches/slackhook/issues",
+        "source": "https://github.com/19peaches/slackhook"
+    },
+    "authors": {
+        "name": "Vince Kronlein",
+        "email": "vince@19peaches.com"
+    },
+    "require": {
+        "php": ">=5.4",
+        "curl": ">=7.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Slackhook\\": ""
+        }
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-master": "1.0-dev"
+        }
+    },
+    "minimum-stability": "dev"
+}
