@@ -1,5 +1,18 @@
 <?php
 
+/*
+|--------------------------------------------------------------------------
+|  Slackhook Message Package
+|--------------------------------------------------------------------------
+|
+|  Copyright: 19 Peaches, LLC.
+|  Author:    Vince Kronlein <vince@19peaches.com>
+|
+|  For the full copyright and license information, please view the LICENSE
+|  file that was distributed with this source code.
+|
+*/
+
 namespace Slackhook;
 
 use Exception;
@@ -15,6 +28,20 @@ class Slack {
     protected $uri;
 
     /**
+     * Template provider instance;
+     *
+     * @var \Slackhook\Contracts\TemplateProvider
+     */
+    protected $provider;
+
+    /**
+     * Attached and formatted template array;
+     *
+     * @var array
+     */
+    protected $attached;
+
+    /**
      * Our JSON data property.
      *
      * @var string
@@ -24,54 +51,96 @@ class Slack {
     /**
      * Channel to send message to.
      *
-     * @var # string
+     * @var string
      */
     protected $channel;
 
     /**
      * Username the message is from.
      *
-     * @var @ string
+     * @var string
      */
     protected $username;
 
-    protected $domain;
+    /**
+     * Color for attachments.
+     *
+     * @var string
+     */
+    protected $color = "#000000";
 
-    protected $site;
+    /**
+     * Icon for attachments.
+     *
+     * @var string
+     */
+    protected $icon = ":mailbox:";
+
+    /**
+     * Domain URI for template providers.
+     *
+     * @var string
+     */
+    public $domain;
+
+    /**
+     * Site name for template providers.
+     *
+     * @var string
+     */
+    public $site;
 
     /**
      * Instantiate a new message object.
      *
-     * @param  string $uri      webhook uri.
-     * @param  string $channel  receiving channel.
-     * @param  string $username sending username.
-     * @return object $this     chainable instance of class.
+     * @param array $config configuration variable
      */
     public function __construct(array $config = [])
     {
-        // Enter your URI here or pass it in when instantiating the object.
-        // If you're passing in the uri make sure it's https protocol
-        $this->uri = "https://hooks.slack.com/services/webhook/endpoint";
-
-        if (!empty($config["uri"])) {
-            $this->uri = $config["uri"];
+        // Make sure we have a uri
+        if (empty($config["uri"])) {
+            throw new Exception("Your Slack webhook URI is required.", 1);
         }
 
-        // Enter your channel here or pass it in when instantiating the object.
+        $this->uri = $config["uri"];
+
         // If you want to send to specific user, you can ovveride that in the
         // make method below.
-        $this->channel = "#example";
-
-        if (!empty($config["channel"])) {
-            $this->channel = "#{$config["channel"]}";
+        if (empty($config["channel"])) {
+            throw new Exception("Your Slack channel is required", 1);
         }
 
-        // Set the username your hook will display in the message
-        // or pass it in when instantiating the object.
-        $this->username = "example-bot";
+        $this->channel = "#{$config["channel"]}";
 
-        if (!empty($config["username"])) {
-            $this->username = $config["username"];
+        // Set the username your hook will display in the message.
+        if (empty($config["username"])) {
+            throw new Exception("A sending Slack username is required.", 1);
+        }
+
+        $this->username = $config["username"];
+
+        // Set site domain for use in template providers.
+        if (empty($config["domain"])) {
+            throw new Exception("Domain is required for template providers.", 1);
+        }
+
+        $this->domain = $config["domain"];
+
+        // Set site name for use in template providers.
+        if (empty($config["site"])) {
+            throw new Exception("Site name is required for template providers.", 1);
+        }
+
+        $this->site = $config["site"];
+
+        // Set color if not empty.
+        if (! empty($config["color"])) {
+            $this->color = $config["color"];
+        }
+
+        // Set icon if not empty.
+        if (! empty($config["icon"])) {
+            $this->icon = $config["icon"];
         }
 
         return $this;
@@ -80,27 +149,31 @@ class Slack {
     /**
      * Make our JSON payload request.
      *
-     * @param  TemplateProvider $message \Slackhook\Contracts\TemplateProvider
-     * @param  bool/string      $user    pass in a username WITH an @ symbol to override channel.
-     * @param  string           $color   message bar color.
-     * @param  string           $icon    message emoji
-     * @return object           $this    chainable instance of class.
+     * @param  TemplateProvider $template \Slackhook\Contracts\TemplateProvider
+     * @param  bool/string      $user     pass in a username WITHOUT an @ symbol to override channel.
+     * @return object           $this     chainable instance of class.
      */
-    public function make(TemplateProvider $message, $user = false, $color = "#000000", $icon = ":mailbox:")
+    public function make(TemplateProvider $template, $user = false)
     {
+        // Set our local provider property to passed in object;
+        $this->provider = $template;
+
         // If the user is passed in then our channel needs
         // to be changed to reflect that this is a private
         // message.
         if ($user) {
-            $this->channel = $user;
+            $this->channel = "@{$user}";
         }
+
+        // Build our attachment.
+        $this->setAttachments();
 
         // Build up our payload data.
         $payload = [
             "channel"     => $this->channel,
-			"icon_emoji"  => $icon,
+			"icon_emoji"  => $this->icon,
 			"username"    => $this->username,
-			"attachments" => $this->setAttachments($message, $color)
+			"attachments" => $this->attached,
         ];
 
         $this->data = json_encode($payload);
@@ -109,41 +182,50 @@ class Slack {
     }
 
     /**
+     * Setter to update properties on the fly.
+     *
+     * @param string $key   property to change
+     * @param string $value new property value
+     */
+    public function set($key, $value)
+    {
+        $this->{$key} = $value;
+    }
+
+    /**
      * Build our attachments array for payload.
      *
-     * @param  array  $message our message array to parse.
-     * @param  string $color   message bar color.
-     * @return array           attachments array.
+     * @return array attachments array.
      */
-    protected function setAttachments(array $message, $color)
+    protected function setAttachments()
     {
         $fallback    = false;
         $attachments = [];
 
         // Fire an exception if there's no text passed
         // in our $message array.
-        if (empty($message["text"])) {
+        if (empty($this->provider->message["text"])) {
             throw new Exception("Your passed in message array must contain a text message.", 1);
         } else {
             // add text to attachment
-            $attachments["text"] = $message["text"];
+            $attachments["text"] = $this->provider->message["text"];
         }
 
         // Let's build up our fallback message and attachments
         // as we go.
-        if (!empty($message["pretext"])) {
-            $fallback .= $message["pretext"];
-            $attachments["pretext"] = $message["pretext"];
+        if (!empty($this->provider->message["pretext"])) {
+            $fallback .= $this->provider->message["pretext"];
+            $attachments["pretext"] = $this->provider->message["pretext"];
         }
 
-        if (!empty($message["title"])) {
-            $fallback .= " - " . $message["title"];
-            $attachments["title"] = $message["title"];
+        if (!empty($this->provider->message["title"])) {
+            $fallback .= " - " . $this->provider->message["title"];
+            $attachments["title"] = $this->provider->message["title"];
         }
 
-        if (!empty($message["title_link"])) {
-            $fallback .= " - " . $message["title_link"];
-            $attachments["title_link"] = $message["title_link"];
+        if (!empty($this->provider->message["title_link"])) {
+            $fallback .= " - " . $this->provider->message["title_link"];
+            $attachments["title_link"] = $this->provider->message["title_link"];
         }
 
         // Please note that the fallback field is required,
@@ -155,23 +237,23 @@ class Slack {
         if ($fallback) {
             $attachments["fallback"] = $fallback;
         } else {
-            $attachments["fallback"] = $message["text"];
+            $attachments["fallback"] = $this->provider->message["text"];
         }
 
         // Add color
-        $attachments["color"] = $color;
+        $attachments["color"] = $this->color;
 
         // Add in any fields
-        if (!empty($message["fields"])) {
-            $attachments["fields"] = $message["fields"];
+        if (!empty($this->provider->message["fields"])) {
+            $attachments["fields"] = $this->provider->message["fields"];
         }
 
         // Markdown
-        if (!empty($message["mrkdwn_in"])) {
-            $attachments["mrkdwn_in"] = $message["mrkdwn_in"];
+        if (!empty($this->provider->message["mrkdwn_in"])) {
+            $attachments["mrkdwn_in"] = $this->provider->message["mrkdwn_in"];
         }
 
-		return [$attachments];
+        $this->attached = [$attachments];
     }
 
     /**

@@ -25,7 +25,7 @@ class Sale implements TemplateProvider {
      *
      * @var \Slackhook\Slack
      */
-    protected $hook;
+    public $hook;
 
     /**
      * Message template array.
