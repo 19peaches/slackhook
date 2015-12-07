@@ -7,10 +7,6 @@
         "issues": "https://github.com/19peaches/slackhook/issues",
         "source": "https://github.com/19peaches/slackhook"
     },
-    "authors": {
-        "name": "Vince Kronlein",
-        "email": "vince@19peaches.com"
-    },
     "require": {
         "php": ">=5.4",
         "curl": ">=7.0"
