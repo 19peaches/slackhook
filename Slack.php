@@ -171,9 +171,9 @@ class Slack {
         // Build up our payload data.
         $payload = [
             "channel"     => $this->channel,
-			"icon_emoji"  => $this->icon,
-			"username"    => $this->username,
-			"attachments" => $this->attached,
+            "icon_emoji"  => $this->icon,
+            "username"    => $this->username,
+            "attachments" => $this->attached,
         ];
 
         $this->data = json_encode($payload);
